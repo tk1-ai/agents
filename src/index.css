@@ -1,0 +1,56 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --green: #d5eaa8;
+  --green-dark: #a8c97a;
+  --green-text: #3d6b1a;
+  --orange: #eeb98e;
+  --orange-dark: #d4895a;
+  --orange-text: #7a4010;
+  --black: #111111;
+  --charcoal: #222222;
+  --grey: #555555;
+  --grey-light: #888888;
+  --border: #dddddd;
+  --bg: #f7f7f5;
+  --white: #ffffff;
+  --font: 'DM Sans', sans-serif;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--black);
+  min-height: 100vh;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@keyframes typingDot {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes tokenFlash {
+  0% { color: var(--white); }
+  50% { color: #ff4444; transform: scale(1.3); }
+  100% { color: var(--white); }
+}
+
+.slide-up { animation: slideUp 0.5s ease forwards; }
+.slide-down { animation: slideDown 0.4s ease forwards; }
+.fade-in { animation: fadeIn 0.4s ease forwards; }
+.token-flash { animation: tokenFlash 0.4s ease; }
