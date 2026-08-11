@@ -1,5 +1,5 @@
-// NEW FILE — central place for n8n webhook URLs and the trigger helper.
-// MODIFIED: one webhook per agent (not one per level) — the n8n workflow
+// Central place for n8n webhook URLs and the trigger helper.
+// One webhook per agent (not one per level) — the n8n workflow
 // itself routes internally based on the `level` field in the payload.
 
 export const N8N_WEBHOOKS = {
@@ -32,7 +32,7 @@ export async function triggerN8N(url: string, payload: N8NPayload): Promise<void
   }
 }
 
-// NEW: separate webhooks for "AI mode" — these workflows generate the chat
+// Separate webhooks for "AI mode" — these workflows generate the chat
 // line dynamically with an LLM (and still perform the real action via
 // Gmail/Serper at level 2+), instead of just executing a side effect for
 // pre-written text. Kept apart from N8N_WEBHOOKS so the original scripted
@@ -46,7 +46,7 @@ export const N8N_AI_WEBHOOKS = {
 // turn (what should happen) without dictating exact wording — the LLM in n8n
 // writes the actual line. `conversationHistory` keeps the story coherent.
 export interface N8NAIPayload {
-  mode: 'ai'
+  mode: 'ai' | 'freechat'
   agent: 'email' | 'research'
   level: 1 | 2 | 3
   scenarioContext: string
