@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react'
-import { Lock, Mail, Search, RotateCcw, Coins, CheckCircle, AlertTriangle, Shield, TrendingUp, Users, Sparkles, Send, Square, MessageCircle } from 'lucide-react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
+import { Lock, Mail, Search, RotateCcw, CheckCircle, Send, Square } from 'lucide-react'
 import { scenario, SCENARIO_TITLE, ScenarioMessage, aiBeats } from './data/scenario'
 import { N8N_WEBHOOKS, triggerN8N, N8NPayload, N8N_AI_WEBHOOKS, triggerN8NSync } from './config/n8n'
 
@@ -35,9 +35,9 @@ const AGENTS: AgentConfig[] = [
 
 const DIRECTIVES: Record<AgentKey, { level: Level; name: string; desc: string }[]> = {
   email: [
-    { level: 1, name: 'Draft & Confirm', desc: 'Agent composes all emails but sends nothing without your approval' },
-    { level: 2, name: 'Auto-Send Routine Messages', desc: 'Agent sends standard low-stakes emails automatically and drafts anything sensitive for your review' },
-    { level: 3, name: 'Autonomous Relationship Management', desc: 'Agent manages all communication relationships end to end and sends you a weekly digest' },
+    { level: 1, name: 'Draft & Confirm', desc: 'Agent drafts emails for you to review. Does not send anything.' },
+    { level: 2, name: 'Auto-Send Routine Messages', desc: 'Agent sends standard low-stakes emails automatically. Drafts anything sensitive for your review.' },
+    { level: 3, name: 'Autonomous Relationship Management', desc: 'Agent sends emails, manages follow-ups, and handles all communication end to end. Sends you a weekly digest.' },
   ],
   research: [
     { level: 1, name: 'Summarise & Recommend', desc: 'Agent searches and synthesises findings and gives you a ranked recommendation. Takes no downstream action' },
@@ -153,12 +153,15 @@ function LevelBadge({ level }: { level: Level }) {
   )
 }
 
-function TypingIndicator({ color }: { color: string }) {
+function TypingIndicator({ color, name }: { color: string; name?: string }) {
   return (
-    <div style={{ display: 'flex', gap: 4, padding: '10px 14px', background: '#eeeeee', borderRadius: 12, width: 'fit-content' }}>
-      {[0, 1, 2].map(i => (
-        <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: color, animation: `typingDot 1.2s ease ${i * 0.2}s infinite` }} />
-      ))}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 4, padding: '10px 14px', background: '#eeeeee', borderRadius: 12, width: 'fit-content' }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: color, animation: `typingDot 1.2s ease ${i * 0.2}s infinite` }} />
+        ))}
+      </div>
+      {name && <span style={{ fontSize: 11, color, fontWeight: 600, fontStyle: 'italic' }}>{name} is working...</span>}
     </div>
   )
 }
@@ -190,6 +193,13 @@ export default function App() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const allLocked = AGENTS.every(a => lockedLevels[a.id] !== undefined)
+
+  // Auto-start free chat when both agents are locked
+  useEffect(() => {
+    if (allLocked && !scenarioRunning) {
+      startFreeChat()
+    }
+  }, [allLocked])
   const configuredCount = Object.keys(lockedLevels).length
   const capabilityScore = Object.values(lockedLevels).reduce((s, l) => s + (l || 0), 0)
 
@@ -546,11 +556,6 @@ export default function App() {
           <div style={{ color: C.greyLight, fontSize: 11, marginTop: 1 }}>{configuredCount} of 2 agents configured</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {runMode !== 'freechat' && (
-            <div className={tokenFlash ? 'token-flash' : ''} style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.green, fontWeight: 700, fontSize: 14 }}>
-              <Coins size={15} /> {tokens}
-            </div>
-          )}
           <button onClick={handleReset} style={{ background: C.white, color: C.black, border: 'none', borderRadius: 8, padding: '6px 14px', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
             <RotateCcw size={12} /> Reset
           </button>
@@ -634,51 +639,24 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontWeight: 800, fontSize: 15 }}>Agent Chatroom</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: runMode === 'freechat' ? C.blueDark : C.greenDark, animation: 'pulse-dot 2s infinite' }} />
-                  <span style={{ fontSize: 11, color: runMode === 'freechat' ? C.blueText : C.greenText, fontWeight: 700 }}>
-                    {runMode === 'freechat' ? 'Free Chat' : 'Live'}
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: isSending ? C.blueDark : C.greenDark, animation: 'pulse-dot 2s infinite' }} />
+                  <span style={{ fontSize: 11, color: isSending ? C.blueText : C.greenText, fontWeight: 700 }}>
+                    {isSending ? 'Agents working...' : 'Ready'}
                   </span>
                 </div>
               </div>
-              {runMode !== 'freechat' && (
-                <span style={{ fontSize: 11, color: C.grey, background: C.bg, padding: '3px 10px', borderRadius: 20, border: `1px solid ${C.border}` }}>{SCENARIO_TITLE}</span>
-              )}
             </div>
             <div style={{ fontSize: 11, color: C.greyLight, fontStyle: 'italic', marginBottom: 14 }}>
-              {runMode === 'freechat'
-                ? 'Direct your agents with natural language. They respond through n8n and coordinate with each other.'
-                : 'Agent behaviour reflects the autonomy directive you selected'}
+              Direct your agents with natural language. They respond through n8n and coordinate with each other.
             </div>
 
-            {/* Mode start buttons */}
-            {!scenarioRunning ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <button onClick={startScenario} style={{ padding: '12px 0', borderRadius: 9, background: C.black, color: C.white, fontWeight: 700, fontSize: 12, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                    ▷ Scripted Scenario
-                  </button>
-                  <button onClick={startScenarioAI} style={{ padding: '12px 0', borderRadius: 9, background: C.blueDark, color: C.white, fontWeight: 700, fontSize: 12, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                    <Sparkles size={13} /> AI Scenario
-                  </button>
-                </div>
-                <button onClick={startFreeChat} style={{ padding: '12px 0', borderRadius: 9, background: C.white, color: C.black, fontWeight: 700, fontSize: 12, border: `2px solid ${C.black}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                  <MessageCircle size={13} /> Free Chat -- Direct Your Agents
-                </button>
-              </div>
-            ) : (
+            {/* Clear chat button */}
+            {scenarioRunning && (
               <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-                <button
-                  onClick={runMode === 'ai' ? startScenarioAI : runMode === 'freechat' ? startFreeChat : startScenario}
+                <button onClick={startFreeChat}
                   style={{ flex: 1, padding: '10px 0', borderRadius: 9, background: C.bg, color: C.grey, fontWeight: 600, fontSize: 12, border: `1px solid ${C.border}`, cursor: 'pointer' }}>
-                  ↺ Restart {runMode === 'ai' ? '(AI)' : runMode === 'freechat' ? '(Free Chat)' : '(Scripted)'}
+                  ↺ Clear Chat
                 </button>
-                {runMode === 'freechat' && (
-                  <button
-                    onClick={() => { handleReset() }}
-                    style={{ padding: '10px 16px', borderRadius: 9, background: C.bg, color: C.grey, fontWeight: 600, fontSize: 12, border: `1px solid ${C.border}`, cursor: 'pointer' }}>
-                    Exit
-                  </button>
-                )}
               </div>
             )}
 
@@ -687,10 +665,11 @@ export default function App() {
               {chatMessages.map(msg => {
                 if (msg.text === '__typing__') {
                   const info = agentInfo(msg.agent)
+                  const agentName = msg.agent === 'EA' ? 'Email Agent' : 'Research Agent'
                   return (
                     <div key={msg.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Avatar initials={msg.agent} color={info.color} bg={info.bg} size={26} />
-                      <TypingIndicator color={info.color} />
+                      <TypingIndicator color={info.color} name={agentName} />
                     </div>
                   )
                 }
@@ -737,18 +716,8 @@ export default function App() {
                 )
               })}
 
-              {/* Scenario: approval button */}
-              {runMode !== 'freechat' && pausedAt !== null && !showUnexpected && (
-                <div className="slide-down" style={{ textAlign: 'center', padding: '10px 0' }}>
-                  <div style={{ fontSize: 11, color: C.greyLight, marginBottom: 8 }}>Agent is waiting for your approval</div>
-                  <button onClick={handleApprove} style={{ background: C.green, color: C.greenText, border: `1px solid ${C.greenDark}`, borderRadius: 9, padding: '9px 22px', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                    <CheckCircle size={14} /> Review & Approve -- costs 1 token
-                  </button>
-                </div>
-              )}
-
-              {/* Free chat empty state */}
-              {runMode === 'freechat' && chatMessages.length <= 1 && !isSending && (
+              {/* Suggestion chips */}
+              {chatMessages.length <= 1 && !isSending && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', padding: '12px 0' }}>
                   {[
                     'Research Meridian Co. and tell me what you find',
@@ -764,8 +733,8 @@ export default function App() {
               )}
             </div>
 
-            {/* Free chat input */}
-            {runMode === 'freechat' && (
+            {/* Chat input */}
+            {(
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <input
                   ref={inputRef}
@@ -801,27 +770,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Scenario: Unexpected Event */}
-            {runMode !== 'freechat' && showUnexpected && (
-              <div className="slide-down" style={{ background: '#fff3e0', border: `2px solid #d4895a`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <AlertTriangle size={17} color="#7a4010" />
-                  <span style={{ fontWeight: 800, color: '#7a4010', fontSize: 13 }}>Urgent -- Incoming Event</span>
-                </div>
-                <p style={{ fontSize: 12, color: C.charcoal, marginBottom: 14, lineHeight: 1.6 }}>
-                  Meridian's CFO has replied. They are reviewing three suppliers this week and need a response by end of business today. Your Research Agent has spotted it and flagged it to the Email Agent.
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <button onClick={handleTakeControl} style={{ padding: '10px 0', borderRadius: 9, background: C.white, color: C.black, border: `2px solid ${C.black}`, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                    Take Control
-                  </button>
-                  <button onClick={handleTrustAgents} style={{ padding: '10px 0', borderRadius: 9, background: C.black, color: C.white, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                    Trust My Agents
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Audit Log */}
             {auditLog.length > 0 && (
               <div style={{ background: C.bg, borderRadius: 10, padding: 14, border: `1px solid ${C.border}` }}>
@@ -840,55 +788,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Summary Report (scenario modes only) */}
-        {runMode !== 'freechat' && showSummary && outcomeContent && (
-          <div className="slide-up" style={{ background: C.white, borderRadius: 14, padding: 24, boxShadow: '0 2px 12px #0002', border: `1px solid ${C.border}`, marginBottom: 32 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-              <TrendingUp size={18} color={C.black} />
-              <span style={{ fontWeight: 800, fontSize: 17 }}>Your Governance Report</span>
-            </div>
-            <div style={{ fontSize: 11, color: C.greyLight, marginBottom: 24 }}>Based on Gartner's AI Agent Autonomy Framework, May 2026</div>
-            <div style={{ textAlign: 'center', marginBottom: 24 }}>
-              <div style={{ fontSize: 52, fontWeight: 900, color: C.black, lineHeight: 1 }}>{capabilityScore}<span style={{ fontSize: 22, color: C.greyLight, fontWeight: 400 }}>/6</span></div>
-              <div style={{ position: 'relative', height: 10, background: C.bg, borderRadius: 5, margin: '14px 0 6px', border: `1px solid ${C.border}` }}>
-                <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${((capabilityScore - 2) / 4) * 100}%`, background: `linear-gradient(90deg, ${C.greenDark}, ${C.blueDark}, ${C.black})`, borderRadius: 5, transition: 'width 1s ease' }} />
-                <div style={{ position: 'absolute', left: `${((capabilityScore - 2) / 4) * 100}%`, top: -5, transform: 'translateX(-50%)', width: 20, height: 20, borderRadius: '50%', background: C.black, border: `3px solid ${C.white}`, boxShadow: '0 2px 6px #0003' }} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.greyLight, fontWeight: 700, letterSpacing: 0.5 }}>
-                <span>CAUTIOUS</span><span>BALANCED</span><span>AUTONOMOUS</span>
-              </div>
-            </div>
-            <div style={{ background: C.bg, borderRadius: 12, padding: 18, marginBottom: 18, border: `1px solid ${C.border}` }}>
-              <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10 }}>{outcomeContent.title}</div>
-              <div style={{ fontSize: 12, color: C.charcoal, lineHeight: 1.8 }}>{outcomeContent.body}</div>
-              {tokensSpent > 0 && <div style={{ marginTop: 10, fontSize: 12, color: '#7a4010', fontWeight: 700, background: '#eeb98e40', padding: '5px 10px', borderRadius: 6, display: 'inline-block' }}>Tokens spent: {tokensSpent}</div>}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 20 }}>
-              {[
-                { icon: <Users size={13} />, heading: 'Where the world actually sits', body: 'Most production deployments in 2026 sit at Level 1 or Level 2. Only 15% of business processes are expected to operate at semi-autonomous or above by end of 2026.', source: 'GARTNER, 2026', bg: C.green },
-                { icon: <Shield size={13} />, heading: 'The trust gap is growing', body: 'Only 27% of organisations trust fully autonomous agents -- down from 43% twelve months ago. Trust is declining faster than capability is improving.', source: 'CAPGEMINI, 2025', bg: C.blue },
-                { icon: <TrendingUp size={13} />, heading: outcomeContent.card3.heading, body: outcomeContent.card3.body, source: outcomeContent.source, bg: '#e8e8e8' },
-              ].map((card, i) => (
-                <div key={i} style={{ background: card.bg + '50', borderRadius: 12, padding: 14, border: `1px solid ${C.border}` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>{card.icon}<span style={{ fontWeight: 800, fontSize: 11 }}>{card.heading}</span></div>
-                  <div style={{ fontSize: 11, color: C.charcoal, lineHeight: 1.6, marginBottom: 8 }}>{card.body}</div>
-                  <div style={{ fontSize: 9, color: C.grey, fontWeight: 700, letterSpacing: 0.5 }}>{card.source}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ textAlign: 'center', fontSize: 12, color: C.greyLight, fontStyle: 'italic', marginBottom: 20 }}>
-              If you ran this scenario again with different directive levels, what would you change -- and why?
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <button onClick={handleReset} style={{ padding: '12px 0', borderRadius: 9, background: C.black, color: C.white, fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-                <RotateCcw size={13} /> Run Again
-              </button>
-              <button onClick={handleShare} style={{ padding: '12px 0', borderRadius: 9, background: C.white, color: C.black, fontWeight: 700, fontSize: 13, border: `2px solid ${C.black}`, cursor: 'pointer' }}>
-                Share My Result
-              </button>
-            </div>
-          </div>
-        )}
+
       </div>
 
       {/* Bottom Banner */}
